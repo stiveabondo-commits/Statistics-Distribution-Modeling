@@ -11,4 +11,4 @@ Model the daily returns of the S&P500 index accurately and conduct robust statis
 - **Non-Parametric Regression:** Polynomial and exponential regressions to identify non-linear trends.
 
 ##  Technologies
-`R`, `Python`, `SciPy`, `Statistical Modeling`, `Hypothesis Testing`
+`R`, `Statistical Modeling`, `Hypothesis Testing`
