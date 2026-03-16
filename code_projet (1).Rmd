@@ -1,0 +1,802 @@
+---
+title: "MAP566 - Homework assignment #1"
+author: "Groupe D: Abondo Owona Emmanuel, Chaponniere Léna, Ouyang Yike, Yao Yuguang"
+date: "8 mars 2026"
+format:
+  html:
+    self-contained: true
+    theme: [cosmo, theme.scss]
+    toc: true
+    number-sections: true
+    html-math-method: katex
+    code-copy: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+---
+```
+Telecharger les 4 csv dans le meme dossier que ce fichier.
+```
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(readr)
+library(tidyverse)
+library(ggplot2)
+library(ggfortify)
+library(mixtools)
+theme_set(theme_bw())
+```
+
+
+
+# Single comparison
+
+```{r, warning=FALSE}
+library(readr)
+NHANES <- read_csv("NHANES_age_prediction 3.csv")
+data = NHANES[,c("DIQ010","age_group","RIDAGEYR","RIAGENDR","PAQ605","BMXBMI","LBXGLU","LBXGLT","LBXIN")]
+colnames(data) = c("Diabete","age_group","Age","Sex","Phys_activ","BMI","Glu","Glu2h","BIL")
+```
+
+We study data from the National Health and Nutrition Examination Survey (NHANES), administered by the Centers for Disease Control and Prevention (CDC), which collects extensive health and nutritional information from a diverse U.S. population.
+
+
+```{r}
+rmarkdown::paged_table(data)
+```
+
+
+The variables under study are :
+
+  - `Diabete`: diabete diagnosis (1: Yes, 2: No, 3: Borderline);
+  - `age_group` : age group of respondent ("Adult" or "Senior");
+  - `Age` : the age of respondent;
+  - `Sex`: sex of respondent (1: Male, 2: Female);
+  - `Physical activity`: respondent's answer to the question "Does your work involve vigorous-intensity activity that causes large increases in breathing or heart rate like carrying or lifting heavy loads, digging or construction work for at least 10 minutes continuously? (1: Yes, 2: No, 7: no answer);
+  - `BMI` : Body Mass Index if respondent ($kg/m^{2}$);
+  - `Glu` : Respondent's Blood Glucose after fasting ($mg/dL$);
+  - `Glu2h` : Respondent's Two Hours Blood Glucose ($mg/dL$);
+  - `BIL` : Respondent's Blood Insulin Level ($pmol/L$).
+  
+
+1. Test if the mean level of blood glucose after fasting is the same for diabetic and non diabetic respondents (*hint:* plot first the data and justify the test(s) to use).
+    
+```{r}
+data1 <- data%>% select(Diabete,Glu)%>% filter(Diabete != 3)
+data1 %>% 
+  ggplot(aes(x = as.factor(Diabete), y = Glu)) +
+  geom_boxplot(aes(fill = as.factor(Diabete)), alpha = 0.5) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  ylab("Glu (g)") +
+  xlab("Diabete")
+
+diab <- data1%>% filter(Diabete ==1)%>%select(Glu)
+ controls<- data1%>% filter(Diabete ==2)%>%select(Glu)
+
+
+t.test(controls,diab,paired=FALSE)
+#  p-value = 0.01023, 1% de chance d obtenir ses resultats s ils etaient identiques
+
+```
+    
+2. Test for the diabetic respondents if the mean level of blood glucose after fasting is the same for adults and seniors. 
+
+```{r}
+data2 <- data%>% filter(Diabete == 1)%>% select(age_group,Glu)
+data2 %>% 
+  ggplot(aes(x = as.factor(age_group), y = Glu)) +
+  geom_boxplot(aes(fill = as.factor(age_group)), alpha = 0.5) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  ylab("Glu (g)") +
+  xlab("Diabete")
+
+adult <- data2%>% filter(age_group =='Adult')%>%select(Glu)
+senior <- data2%>% filter(age_group =='Senior')%>%select(Glu)
+
+
+t.test(adult,senior,paired=FALSE)
+#   p-value = 0.04363, inferieur a 5% de chance
+```
+
+3. Is it possible to test for the adults diabetic respondents if the mean level of blood glucose after fasting is the same for those who have a vigorous work activity and for those who have not?
+
+```{r}
+data3 <- data%>% filter(Diabete == 1 & age_group =='Adult' & Phys_activ!= 7)%>% select(Phys_activ,Glu)
+data3 %>% 
+  ggplot(aes(x = as.factor(Phys_activ), y = Glu)) +
+  geom_boxplot(aes(fill = as.factor(Phys_activ)), alpha = 0.5) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  ylab("Glu (g)") +
+  xlab("Diabete")
+# trop peu de points significatifs
+sport <- data3%>% filter(Phys_activ ==1)%>%select(Glu)
+rest <- data3%>% filter(Phys_activ ==2)%>%select(Glu)
+
+
+t.test(sport,rest,paired=FALSE)
+# p-value = 0.2066, trop peu de points
+```
+
+4. Test if the proportion of diabetic is the same for male and female respondents. Compare conclusions of several tests. You can use the function `table` to compute contingency tables. 
+```{r}
+data%>% filter(Sex==1)%>%count(Diabete) #8 parmi 1113
+data%>% filter(Sex==2)%>%count(Diabete) #13 parmi 1165
+data%>% count(Sex) 
+diabete     <- c(8, 13)
+non.diabete <- c(1113-8, 1165-13)
+diab_mat <- matrix(c(diabete,non.diabete), nrow = 2)
+
+tab <- table(data$Sex, data$Diabete)
+tab <- table(data$Sex, data$Diabete)[ , c("1","2")]
+
+fisher.test(tab) # p-value = 0.3847 loi hypergeometrique, exacte
+prop.test(tab)  #p-value = 0.4515 approximation par loi du chi 2
+
+```
+
+
+# Gene expression data
+
+The *liver* dataset contains measurements of rat liver toxicity levels (measured through cholesterol levels) as well as measurements of the expression levels of several thousand genes.
+
+When loading the data (file `liver_data.rda`), the table *liver* is created with 64 rows (the observations) and 3117 columns. The data can be loaded using the following code:
+
+```{r}
+load("liver_data.rda")
+```
+
+The first column, `cholesterol`, is the variable to be explained. The remaining 3116 are the expressions of 3116 genes (more precisely, the logarithm of the ratio between expression levels in two experimental conditions). The aim is to identify the variables (and therefore the genes) linked to the response.
+
+1. We first want to study the gene which is the most correlated with the level of cholesterol. Identify this gene and plot `cholesterol` as a function of this gene expression level. Fit a linear model. Test if there is a significant relation between this gene expression and `cholesterol`?
+
+```{r}
+# Extract cholesterol and gene expression data
+cholesterol <- liver$cholesterol
+genes <- liver[, -1] # Remove the first column (cholesterol)
+
+# Compute correlations
+correlations <- cor(genes, cholesterol)
+
+# Find the gene with the maximum absolute correlation
+max_cor_idx <- which.max(abs(correlations))
+max_cor_gene <- names(genes)[max_cor_idx]
+
+cat("Most correlated gene:", max_cor_gene, "\n")
+cat("Correlation:", correlations[max_cor_idx], "\n")
+
+# Plot cholesterol vs the most correlated gene
+plot(genes[[max_cor_gene]], cholesterol, 
+     xlab = max_cor_gene, ylab = "Cholesterol",
+     main = paste("Cholesterol vs", max_cor_gene))
+
+# Fit a linear model
+model_best <- lm(cholesterol ~ genes[[max_cor_gene]])
+abline(model_best, col = "red")
+
+# Save figure for LaTeX report
+#pdf("figs/cholesterol_vs_best_gene.pdf", width = 6, height = 4)
+plot(genes[[max_cor_gene]], cholesterol, 
+     xlab = max_cor_gene, ylab = "Cholesterol",
+     main = paste("Cholesterol vs", max_cor_gene))
+abline(model_best, col = "red")
+dev.off()
+
+# Test for significance
+summary_best <- summary(model_best)
+print(summary_best)
+```
+
+
+2. We now wish to perform the previous test for all of the 3116 genes. For each of the genes, fit a linear model that explains `cholesterol` as a function of the gene expression and compute the $p$-value of the test.
+
+```{r}
+# Initialize a vector to store p-values
+p_values <- numeric(ncol(genes))
+names(p_values) <- colnames(genes)
+
+# Loop over all genes to fit linear models
+for (i in seq_along(genes)) {
+  model <- lm(cholesterol ~ genes[, i])
+  p_values[i] <- summary(model)$coefficients[2, 4] # Extract p-value of the slope
+}
+```
+
+3. Order the $p$-values and plot the ordered $p$-values as a function of their rank. On the same plot, display the line $y = x/3116$. Discuss the result.
+
+```{r}
+# Sort p-values
+p_sorted <- sort(p_values)
+m <- length(p_values)
+ranks <- 1:m
+
+# Plot ordered p-values
+plot(ranks, p_sorted, type = "l", col = "blue",
+     xlab = "Rank", ylab = "Ordered p-value",
+     main = "Ordered p-values vs Rank")
+
+# Display the line y = x/3116
+abline(0, 1/m, col = "red", lty = 2)
+legend("topleft", legend = c("Ordered p-values", "y = x/m"),
+       col = c("blue", "red"), lty = c(1, 2))
+
+# Save figure for LaTeX report
+#pdf("figs/ordered_pvalues.pdf", width = 6, height = 4)
+plot(ranks, p_sorted, type = "l", col = "blue",
+     xlab = "Rank", ylab = "Ordered p-value",
+     main = "Ordered p-values vs Rank")
+abline(0, 1/m, col = "red", lty = 2)
+legend("topleft", legend = c("Ordered p-values", "y = x/m"),
+       col = c("blue", "red"), lty = c(1, 2))
+dev.off()
+```
+
+
+4. Identify a set of genes linked to the response (*aka* discoveries). We want to guarantee that the expected proportion of false discoveries (mistakes) is less than $5\%$. Explain how you proceed and how many genes you discover.
+
+```{r}
+# Benjamini-Hochberg (BH) procedure for FDR control at alpha = 0.05
+alpha <- 0.05
+
+# We look for the largest k such that p_(k) <= (k/m) * alpha
+# p_sorted are the ordered p-values, ranks are k
+bh_threshold <- (ranks / m) * alpha
+
+# Find indices where p-value is below the BH threshold
+discoveries_indices <- which(p_sorted <= bh_threshold)
+
+if (length(discoveries_indices) > 0) {
+  k_star <- max(discoveries_indices)
+  cat("Number of discoveries (FDR < 5%):", k_star, "\n")
+  
+  # List the discovered genes
+  discovered_genes_BH <- names(p_sorted)[1:k_star]
+} else {
+  cat("No discoveries found with FDR < 5%\n")
+}
+```
+
+
+5. We wish to be more conservative and guarantee that the probability of making a false discovery (or more) is less than $5\%$. Explain how you proceed and how many genes you discover.
+
+```{r}
+# Bonferroni correction for FWER control at alpha = 0.05
+# We reject null hypothesis if p-value <= alpha / m
+bonferroni_threshold <- alpha / m
+cat("Bonferroni threshold:", bonferroni_threshold, "\n")
+
+# Count discoveries
+n_discoveries_Bonf <- sum(p_values <= bonferroni_threshold)
+cat("Number of discoveries (FWER < 5%):", n_discoveries_Bonf, "\n")
+
+# List the discovered genes
+discovered_genes_Bonf <- names(p_values)[p_values <= bonferroni_threshold]
+```
+
+# Non parametric regression
+
+1. Upload the dataset contained in the file `data_exo3.csv` and plot the data.  
+
+```{r donnees}
+
+data <- read_csv("data_exo3.csv")
+
+data <- data %>%
+  separate(xty, into = c("x","y"), sep = "t") %>%
+  mutate(
+    x = as.numeric(str_replace(x, ",", ".")),
+    y = as.numeric(str_replace(y, ",", "."))
+  )
+```
+
+```{r scatter}
+p_scatter <- ggplot(data, aes(x = x, y = y)) +
+  geom_point(size = 2, colour = "#993399") +
+  labs(title = "Scatter plot of the data", x = "x", y = "y")
+p_scatter
+ggsave("scatter.png", plot = p_scatter, width = 4, height = 3, dpi = 300)
+```
+
+2. Try several polynomial models for the data, select a model and comment the results. 
+
+## Fitting models degree 0 to 3
+
+```{r fit-poly}
+lm0 <- lm(y ~ 1,          data = data)
+lm1 <- lm(y ~ poly(x, 1), data = data)
+lm2 <- lm(y ~ poly(x, 2), data = data)
+lm3 <- lm(y ~ poly(x, 3), data = data)
+```
+
+```{r plot-poly}
+x_seq  <- seq(min(data$x), max(data$x), length.out = 300)
+x_grid <- data.frame(x = x_seq)
+
+pred_df <- data.frame(
+  x     = rep(x_seq, 4),
+  fit   = c(predict(lm0, x_grid), predict(lm1, x_grid),
+            predict(lm2, x_grid), predict(lm3, x_grid)),
+  Model = rep(c("Degree 0","Degree 1","Degree 2","Degree 3"), each = 300)
+)
+
+p_poly <- ggplot(data, aes(x = x, y = y)) +
+  geom_point(size = 2, colour = "black") +
+  geom_line(data = pred_df, aes(x = x, y = fit, colour = Model), linewidth = 0.9) +
+  scale_colour_manual(values = c(
+    "Degree 0" = "red", "Degree 1" = "blue",
+    "Degree 2" = "darkgreen", "Degree 3" = "purple")) +
+  labs(title = "Polynomial models – degrees 0 to 3", colour = "Model")
+p_poly
+ggsave("poly_models.png", plot = p_poly, width = 4, height = 3, dpi = 300)
+```
+
+## Model comparison (AIC, BIC, ANOVA, LRT)
+
+```{r metrics}
+models  <- list(D0 = lm0, D1 = lm1, D2 = lm2, D3 = lm3)
+data.frame(
+  Degree = 0:3,
+  R2     = round(sapply(models, function(m) summary(m)$r.squared),     3),
+  AdjR2  = round(sapply(models, function(m) summary(m)$adj.r.squared), 3),
+  AIC    = round(sapply(models, AIC), 2),
+  BIC    = round(sapply(models, BIC), 2)
+)
+```
+
+```{r anova-lrt}
+anova(lm0, lm1); anova(lm1, lm2); anova(lm2, lm3)
+
+dl01 <- 2 * as.numeric(logLik(lm1) - logLik(lm0))
+dl12 <- 2 * as.numeric(logLik(lm2) - logLik(lm1))
+dl23 <- 2 * as.numeric(logLik(lm3) - logLik(lm2))
+data.frame(
+  Comparison = c("D0 vs D1", "D1 vs D2", "D2 vs D3"),
+  LRT_stat   = round(c(dl01, dl12, dl23), 3),
+  p_value    = round(c(1-pchisq(dl01,1), 1-pchisq(dl12,1), 1-pchisq(dl23,1)), 5)
+)
+```
+
+## Selected model: degree 2 : summary and diagnostics
+
+```{r summary-diag}
+summary(lm2)
+p_diag <- autoplot(lm2, which = 1:2)
+p_diag
+ggsave("diag_poly2.png", plot = p_diag, width = 6, height = 3, dpi = 300)
+```
+
+3. Fit a nonlinear model and compare with the polynomial model you have selected. 
+
+## Fitting M1 and M2
+
+```{r fit-nls}
+# M1 : f(x) = A*exp(-b*x)
+nlm1 <- nls(y ~ A * exp(-b * x),
+            data = data, start = list(A = 43, b = 0.5))
+
+# M2 : f(x) = A*exp(-b*x) + C  (asymptote C)
+nlm2 <- nls(y ~ A * exp(-b * x) + C,
+            data = data, start = list(A = 43, b = 0.5, C = 1))
+
+summary(nlm1)
+summary(nlm2)
+```
+
+## M1 vs M2 – ANOVA (nested models)
+
+```{r anova-nls}
+anova(nlm1, nlm2)
+# p = 0.23 : C not significant -> keep M1
+```
+
+## M1 vs polynomial degree 2 – AIC/BIC (non-nested)
+
+```{r aic-nls}
+AIC(lm2, nlm1)
+BIC(lm2, nlm1)
+# Polynomial degree 2 has lower AIC and BIC -> selected as final model
+```
+
+## Visualisation – M1 vs polynomial degree 2
+
+```{r plot-nl}
+x_grid2 <- seq(min(data$x), max(data$x), length.out = 300)
+df_lines <- data.frame(
+  x     = rep(x_grid2, 2),
+  y     = c(predict(nlm1, newdata = data.frame(x = x_grid2)),
+            predict(lm2,  newdata = data.frame(x = x_grid2))),
+  Model = rep(c("NL M1 (exponential)", "Polynomial degree 2"), each = 300)
+)
+
+p_nl <- ggplot(data, aes(x = x, y = y)) +
+  geom_point(size = 2, colour = "black") +
+  geom_line(data = df_lines, aes(x = x, y = y, colour = Model), linewidth = 0.9) +
+  scale_colour_manual(values = c(
+    "NL M1 (exponential)" = "steelblue",
+    "Polynomial degree 2" = "darkgreen")) +
+  labs(title = "NL M1 vs polynomial degree 2", colour = "Model")
+p_nl
+ggsave("nl_models.png", plot = p_nl, width = 4, height = 3, dpi = 300)
+```
+
+## Diagnostics – M1
+
+```{r diag-nl}
+resid_nl  <- resid(nlm1)
+fitted_nl <- fitted(nlm1)
+
+p_diag_nl <- ggplot(data.frame(fitted = fitted_nl, resid = resid_nl),
+                    aes(x = fitted, y = resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "red") +
+  geom_smooth(se = FALSE, colour = "blue", linewidth = 0.7) +
+  labs(title = "Residuals vs Fitted", x = "Fitted values", y = "Residuals")
+
+p_qq_nl <- ggplot(data.frame(resid = resid_nl), aes(sample = resid)) +
+  stat_qq() + stat_qq_line(colour = "red") +
+  labs(title = "Normal Q-Q", x = "Theoretical quantiles", y = "Residuals")
+
+p_diag_nl; p_qq_nl
+ggsave("diag_nl.png", plot = p_diag_nl, width = 4, height = 3, dpi = 300)
+ggsave("qq_nl.png",   plot = p_qq_nl,   width = 4, height = 3, dpi = 300)
+```
+
+
+4. Calculate confidence intervals for $\mathbb{E}(Y_{new})$ and prediction intervals for $Y_{new}$ on the following values of the covariate: 
+$$
+x_{new} = (1,...,10). 
+$$
+## Computing intervals for x_new = 1,...,10
+
+```{r intervals}
+x_new <- data.frame(x = 1:10)
+
+conf <- predict(lm2, newdata = x_new, interval = "confidence", level = 0.95)
+pred <- predict(lm2, newdata = x_new, interval = "prediction", level = 0.95)
+
+df_intervals <- data.frame(
+  x        = 1:10,
+  fit      = round(conf[,"fit"], 3),
+  lwr_conf = round(conf[,"lwr"], 3),
+  upr_conf = round(conf[,"upr"], 3),
+  lwr_pred = round(pred[,"lwr"], 3),
+  upr_pred = round(pred[,"upr"], 3)
+)
+print(df_intervals)
+```
+
+## Visualisation
+
+```{r plot-intervals}
+x_grid3   <- data.frame(x = seq(min(data$x), max(data$x), length.out = 300))
+conf_grid <- predict(lm2, newdata = x_grid3, interval = "confidence")
+pred_grid <- predict(lm2, newdata = x_grid3, interval = "prediction")
+
+df_grid <- data.frame(
+  x        = x_grid3$x,
+  fit      = conf_grid[,"fit"],
+  lwr_conf = conf_grid[,"lwr"],
+  upr_conf = conf_grid[,"upr"],
+  lwr_pred = pred_grid[,"lwr"],
+  upr_pred = pred_grid[,"upr"]
+)
+
+p_intervals <- ggplot() +
+  geom_point(data = data, aes(x = x, y = y),
+             colour = "black", size = 1.5, alpha = 0.5) +
+  geom_ribbon(data = df_grid,
+              aes(x = x, ymin = lwr_pred, ymax = upr_pred),
+              fill = "darkgreen", alpha = 0.15) +
+  geom_ribbon(data = df_grid,
+              aes(x = x, ymin = lwr_conf, ymax = upr_conf),
+              fill = "darkgreen", alpha = 0.35) +
+  geom_line(data = df_grid, aes(x = x, y = fit),
+            colour = "darkgreen", linewidth = 1) +
+  geom_point(data = df_intervals, aes(x = x, y = fit),
+             colour = "darkgreen", size = 2.5, shape = 17) +
+  labs(title = "Confidence (dark) and prediction (light) intervals",
+       x = "x", y = "y")
+p_intervals
+ggsave("intervals.png", plot = p_intervals, width = 5, height = 3.5, dpi = 300)
+```
+
+
+# S&P500 daily return
+
+The Standard and Poor's 500 or simply the S&P 500, is a stock market index tracking the performance of 500 large companies listed on stock exchanges in the United States. It is one of the most commonly followed equity indices.
+
+The dataset `sp500_history.csv` contains information about the value of the index at the opening and closing of the market, every day from January 3rd, 2007 to February 2nd, 2024. The goal of the study is to understand the distribution of the *Daily Return* during this period. The daily return is defined as the index difference between closing and opening.
+
+1. Load the dataset `sp500_history.csv` into a *data frame* and add a column that computes the daily return for each days.
+
+```{r}
+library(tidyverse)
+sp500=read_csv("sp500_history.csv")
+sp500 <- sp500 %>% mutate(return=(Close-Open))
+head(sp500)
+```
+
+2. We propose to model the daily return as a sample from a normal population. Write the model and use *R* to fit it to the data. What do you think of this model?
+
+```{r}
+rendements <- na.omit(sp500$return)
+
+mu_chapeau <- mean(rendements)
+sigma_chapeau <- sd(rendements)
+
+mu_chapeau
+sigma_chapeau
+```
+```{r}
+ggplot(sp500, aes(x=return))+ geom_histogram(aes(y=after_stat(density)), bins=60, fill="lightblue", color="black")+ stat_function(fun = dnorm, args = list(mean = mu_chapeau, sd = sigma_chapeau), color="red", linewidth=1.2)+ theme_bw() + labs(title = "Rendements du S&P500 vs Loi Normale", x="Rendement journalier", y="Densité")
+```
+```
+Le modele est depasse au milieu et sur les cotes.
+```
+
+3. Instead of a single normal, we now propose to use a mixture of normals with $p$ components. Write the corresponding models and use *R* to fit them to the data for all values of $p$ between $2$ and $6$. Discuss the results and compare them with the model of Question 1.
+
+```{r}
+mixture_gaussian1D <- function(x, theta0, max_iter = 100, threshold = 1e-6) {
+  
+  ## initialization
+  n <- length(x)
+  deviance     <- numeric(max_iter)        # we save the results
+  theta        <- vector("list", max_iter) # for monitoring
+  likelihoods  <- dcomponents(theta0, x)
+  deviance[1] <- -2 * sum(log(rowSums(likelihoods)))
+  theta[[1]]  <- theta0
+  
+  for (t in 1:max_iter) {
+
+    # E step
+    tau <- likelihoods / rowSums(likelihoods)
+
+    # M step
+    pi    <- colMeans(tau)
+    mu    <- colSums(tau * x) / colSums(tau)
+    sigma <- sqrt(colSums(tau * x^2) / colSums(tau) - mu^2)
+    theta[[t + 1]] <- list(pi = pi, mu = mu, sigma = sigma)
+    
+    ## Assessing convergence
+    likelihoods   <- dcomponents(theta[[t + 1]], x)
+    deviance[t+1] <- - 2 * sum(log(rowSums(likelihoods)))
+
+    ## prepare next iterations
+    if (abs(deviance[t + 1] - deviance[t]) < threshold)
+      break
+
+  }
+
+  res <- cbind(
+      data.frame(iteration = 2:(t+1) - 1, deviance = deviance[2:(t+1)]),
+      theta[2:(t+1)] %>% purrr::map(unlist) %>% do.call('rbind', .)
+    )
+  
+  list(theta = theta[[t+1]], deviance = deviance[(t+1)], convergence = res)
+}
+```
+
+```{r}
+#méthode bibliothèque
+library(mixtools)
+# 1. On définit la fonction dcomponents 
+dcomponents <- function(theta, x) {
+    mapply(
+      function(pik, muk, sigmak) pik * dnorm(x, muk, sigmak),
+      theta$pi, theta$mu, theta$sigma,
+      SIMPLIFY = TRUE
+    )
+}
+
+
+y <- na.omit(sp500$return)
+
+set.seed(123) 
+mod_lib <- normalmixEM(y, k = 2, verb = FALSE)
+
+
+mod_lib$mu     # Les moyennes
+mod_lib$sigma  # Les écart-types
+
+
+#méthode maison
+# Nos valeurs de départ (2 moyennes, 2 écart-types, 2 probas)
+theta0 <- list(
+  pi = c(0.5, 0.5),
+  mu = c(0, 0),
+  sigma = c(5, 20) 
+)
+
+
+mod_maison <- mixture_gaussian1D(y, theta0)
+
+
+mod_maison$theta$mu     # Les moyennes
+mod_maison$theta$sigma  # Les écart-types
+```
+```{r}
+library(knitr)
+
+resultats <- data.frame(
+  Parametre = c("Proportion 1", "Proportion 2",
+                "Moyenne 1", "Moyenne 2",
+                "Écart-type 1", "Écart-type 2"),
+  Mixtools = round(c(mod_lib$lambda,
+                     mod_lib$mu,
+                     mod_lib$sigma), 3),
+  Maison = round(c(mod_maison$theta$pi,
+                   mod_maison$theta$mu,
+                   mod_maison$theta$sigma), 3)
+)
+
+kable(resultats, caption = "Comparaison des paramètres du modèle de mélange")
+```
+```
+Nous avons testé l'algorithme EM implémenté manuellement et celui du package mixtools pour un mélange à 2 composantes. Les deux méthodes convergent vers les mêmes paramètres (moyennes, variances et proportions). L'implémentation est donc validée. Pour la suite de la question, nous utiliserons mixtools qui permet d'explorer facilement des modèles plus complexes (p=3, 4, 5, 6).
+```
+```{r}
+# 1. On prépare un tableau pour stocker nos résultats
+resultats <- data.frame(p = 1:6, Log_Vraisemblance = NA, BIC = NA)
+n <- length(y)
+
+# --- Modèle p = 1---
+loglik_1 <- sum(dnorm(y, mean = mean(y), sd = sd(y), log = TRUE))
+nb_params_1 <- 2 # On estime juste mu et sigma
+bic_1 <- -2 * loglik_1 + nb_params_1 * log(n)
+resultats[1, 2:3] <- c(loglik_1, bic_1)
+
+# --- Modèles p = 2 à 6 (Les mélanges avec mixtools) ---
+set.seed(123) 
+
+for (p in 2:6) {
+  # On ajuste le modèle (maxit=2000 donne plus de temps à l'algo pour converger)
+  modele_p <- normalmixEM(y, k = p, verb = FALSE, maxit = 2000)
+  
+
+  loglik_p <- modele_p$loglik
+  
+
+  nb_params_p <- 3 * p - 1
+  
+
+  bic_p <- -2 * loglik_p + nb_params_p * log(n)
+  
+
+  resultats[p, 2:3] <- c(loglik_p, bic_p)
+}
+
+
+print(resultats)
+```
+```{r}
+
+x_grid <- seq(min(y), max(y), length.out = 500)
+
+df_courbes <- data.frame()
+
+set.seed(123)
+for (p in 2:6) {
+  # On utilise tryCatch pour ignorer les crashs mathématiques (comme pour le BIC)
+  tryCatch({
+    modele <- normalmixEM(y, k = p, verb = FALSE, maxit = 2000)
+    
+    densite_p <- sapply(x_grid, function(x) {
+      sum(modele$lambda * dnorm(x, mean = modele$mu, sd = modele$sigma))
+    })
+    
+    df_temp <- data.frame(x = x_grid, y_dens = densite_p, Modele = paste("Mélange p =", p))
+    df_courbes <- rbind(df_courbes, df_temp)
+    
+  }, error = function(e) { NULL }) # Si ça crash, on ne fait rien
+}
+
+
+ggplot() +
+
+  geom_histogram(data = sp500, aes(x = return, y = after_stat(density)), 
+                 bins = 60, fill = "lightblue", color = "black") +
+  geom_line(data = df_courbes, aes(x = x, y = y_dens), color = "red", linewidth = 1) +
+  facet_wrap(~ Modele, scales = "free_y") +
+  theme_bw() +
+  coord_cartesian(xlim = c(-100, 100)) + 
+  labs(title = "Ajustement des modèles de mélange aux rendements du S&P500",
+       x = "Rendement journalier", y = "Densité")
+```
+```
+Analyse des résultats et choix du nombre de composantes ($p$) :Lors de l'ajustement des modèles de mélange gaussien, nous observons que le modèle simple ($p=1$) est largement surclassé par les modèles de mélange ($p \ge 2$), son critère BIC étant nettement supérieur. Cela confirme que l'utilisation d'une seule loi normale est inadaptée pour capturer les queues de distribution (les événements extrêmes) caractéristiques des rendements boursiers.En augmentant le nombre de composantes, nous remarquons que l'algorithme EM diverge ou rencontre des instabilités numériques à partir de $p=4$. Cette divergence s'explique par un phénomène de sur-apprentissage (overfitting) et de singularité mathématique. L'algorithme a tendance à isoler quelques observations extrêmes dans une composante dédiée dont la variance ($\sigma^2$) s'effondre vers zéro, faisant tendre la vraisemblance vers l'infini.Le minimum du critère BIC est atteint pour le modèle à p=3.
+    
+```
+```{r}
+library(ggplot2)
+library(tidyr)
+
+
+resultats_propres <- na.omit(resultats)
+
+# Graphique du BIC
+ggplot(resultats_propres, aes(x = p, y = BIC)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_point(color = "red", size = 3) +
+  theme_minimal() +
+  labs(title = "Évolution du critère BIC en fonction du nombre de composantes (p)",
+       x = "Nombre de composantes (p)",
+       y = "Valeur du BIC")
+```
+
+
+
+4. As a third and last model, we propose to model the daily return as coming from a location-scale family of Student distributions, which is a model defined by the collection of densities
+$$f_{\nu,m,a}(x) = \frac{\Gamma\big(\frac{\nu+1}{2}\big)}{\sqrt{\pi \nu a^2}\Gamma\big(\frac{\nu}{2}\big)}\Bigg(1+\frac{(x-m)^2}{\nu a^2} \Bigg)^{-\frac{\nu+1}{2}}$$
+where $\Gamma$ is the Gamma function and $\theta=(\nu,m,a) \in \mathbb{R}_+^*\times \mathbb{R}\times \mathbb{R}_+^*$ is the parameter.
+    1. What is the motivation for considering this model?
+    
+```
+La motivation principale est de modéliser le phénomène des "queues épaisses" (fat tails ou leptokurticité) de manière beaucoup plus simple et robuste qu'avec un mélange de lois normales.
+La distribution de Student possède un paramètre clé : $\nu$ (les degrés de liberté). Plus $\nu$ est petit, plus les "queues" de la cloche sont hautes et étalées. Cela permet d'assigner une probabilité réaliste aux krachs boursiers (les valeurs extrêmes) en utilisant une seule formule mathématique au lieu d'empiler plusieurs lois normales (ce qui, comme on l'a vu, provoque des crashs de l'algorithme). Le paramètre $m$ gère le centre (la moyenne), et $a$ gère la dispersion (l'écart-type).
+```
+    
+    2. Propose an algorithm for estimating the parameter of this model and use it to fit this model to the data.
+```{r}
+
+nll_student <- function(theta, x) {
+  nu <- theta[1]
+  m  <- theta[2]
+  a  <- theta[3]
+  
+  # Contraintes mathématiques : nu et a doivent être strictement positifs
+  if(nu <= 0 || a <= 0) return(1e9) 
+  
+  # Formule de la log-densité (équivalente à celle de votre énoncé)
+  log_dens <- -log(a) + dt((x - m) / a, df = nu, log = TRUE)
+  
+  return(-sum(log_dens))
+}
+
+
+theta_init <- c(nu = 5, m = mean(y), a = sd(y))
+
+fit_student <- optim(
+  par = theta_init, 
+  fn = nll_student, 
+  x = y, 
+  method = "L-BFGS-B", # Algorithme qui gère les limites (bornes)
+  lower = c(0.1, -10, 0.0001) # nu > 0.1, m a le droit d'être négatif, a > 0.0001
+)
+
+# 4. Affichage des paramètres estimés par le modèle de Student
+cat("--- PARAMÈTRES ESTIMÉS (Modèle de Student) ---\n")
+cat("Degrés de liberté (nu) :", round(fit_student$par["nu"], 3), "\n")
+cat("Moyenne (m)            :", round(fit_student$par["m"], 3), "\n")
+cat("Échelle (a)            :", round(fit_student$par["a"], 3), "\n")
+    
+```
+    
+5. Between all the previous models (the normal, the 5 mixtures of normals, and the location-scale Student) which one do you choose? Explain your methodology.
+```{r}
+# 1. On récupère la log-vraisemblance de Student (optim minimise, donc on prend l'opposé)
+loglik_student <- -fit_student$value
+
+# 2. La loi de Student a 3 paramètres (nu, m, a), donc k = 3
+k_student <- 3
+
+# 3. Calcul du BIC (avec n = length(y), le nombre de jours)
+bic_student <- -2 * loglik_student + k_student * log(length(y))
+
+cat("BIC Loi de Student :", bic_student, "\n")
+```
+```
+La sélection du modèle repose sur un compromis entre qualité d’ajustement (BIC), stabilité algorithmique et parcimonie. Malgré un BIC légèrement inférieur pour les mélanges gaussiens, la loi de Student est privilégiée car elle capture les queues épaisses avec moins de paramètres et une meilleure stabilité numérique.
+```
+
+
+6. Is the expected daily return different than zero?
+```{r}
+# Test de Student pour savoir si la moyenne est significativement différente de 0
+test_moyenne <- t.test(y, mu = 0)
+
+# Affichage du résultat
+print(test_moyenne)
+```
+```
+Avec une p-value de 0.21 (supérieure à 0.05), les données ne rejettent pas l'hypothèse nulle. Nous n'avons pas de preuves statistiques suffisantes pour affirmer que le rendement moyen est différent de zéro. L'extrême volatilité journalière masque tout éventuel rendement moyen positif.
+```
